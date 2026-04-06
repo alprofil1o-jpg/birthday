@@ -108,3 +108,11 @@ export async function startServer(port) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   startServer(process.env.PORT || 3001);
 }
+
+app.get('/api/push/test', async (req, res) => {
+  const payload = JSON.stringify({ title: '🧪 Teszt értesítés', body: 'Működik!', tag: 'test' });
+  const results = await Promise.allSettled(
+    subscriptions.map(sub => webpush.sendNotification(sub, payload))
+  );
+  res.json({ subscriptions: subscriptions.length, results: results.map(r => r.status) });
+});
