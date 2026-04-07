@@ -109,8 +109,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   startServer(process.env.PORT || 3001);
 }
 
+
 app.get('/balint-kalandjai', async (req, res) => {
-  const payload = JSON.stringify({ title: '🐇EASTER EGG', body: 'Iratkozz fel a Bálint Kalandjai youtube csatornára!', tag: 'test' });
+  const payload = JSON.stringify({ title: '🐣 EASTER EGG', body: 'Iratkozz fel a Bálint Kalandjai youtube csatornára!', tag: 'easter-egg' });
   const results = await Promise.allSettled(
     subscriptions.map(sub => webpush.sendNotification(sub, payload))
   );
