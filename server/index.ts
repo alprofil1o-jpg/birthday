@@ -117,4 +117,3 @@ app.get('/balint', async (req, res) => {
   );
   res.json({ subscriptions: subscriptions.length, results: results.map(r => r.status) });
 });
-*
