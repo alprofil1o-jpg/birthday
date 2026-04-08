@@ -63,6 +63,35 @@ export async function unsubscribeFromPush() {
   } catch (e) {}
 }
 
+// Sync settings to/from server using birthday as user ID
+export async function syncSettingsToServer(birthday: string, data: {
+  savedNames: string[];
+  reminders: any[];
+  notificationSettings: any;
+}) {
+  try {
+    await fetch(`/api/settings/${encodeURIComponent(birthday)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch (e) {}
+}
+
+export async function loadSettingsFromServer(birthday: string): Promise<{
+  savedNames: string[];
+  reminders: any[];
+  notificationSettings: any;
+} | null> {
+  try {
+    const res = await fetch(`/api/settings/${encodeURIComponent(birthday)}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

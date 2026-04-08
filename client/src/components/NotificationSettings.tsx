@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as React from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
-import { subscribeToPush, unsubscribeFromPush } from '../lib/pushHelper';
+import { subscribeToPush, unsubscribeFromPush, syncSettingsToServer, loadSettingsFromServer } from '../lib/pushHelper';
 
 interface NotificationSettingsProps {
   birthday: string;
@@ -31,6 +31,9 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const syncTimeout = useRef<any>(null);
 
   const [bSettings, setBSettings] = useState({
     enabled: false, oneWeekBefore: false, threeDaysBefore: false, oneDayBefore: false, onBirthdayDay: false,
@@ -44,22 +47,57 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
     startDate: new Date().toISOString().split('T')[0], active: true,
   });
 
+  // Load settings — server first, localStorage fallback
   useEffect(() => {
     if ('Notification' in window) setPermission(Notification.permission);
-    const saved = localStorage.getItem('notificationSettings');
-    if (saved) {
-      const s = JSON.parse(saved);
-      setBSettings(s.birthday || bSettings);
-      setNameDayAlerts(s.nameDayAlerts || false);
-      setNameDayDays(s.nameDayAlertDays || [0, 1, 3, 7]);
-    }
-    setReminders(JSON.parse(localStorage.getItem('customReminders') || '[]'));
     navigator.serviceWorker?.ready.then(reg =>
       reg.pushManager.getSubscription().then(sub => setPushEnabled(!!sub))
     );
-  }, []);
 
-  // Reminder checker — runs every 30 seconds
+    const loadSettings = async () => {
+      setSyncing(true);
+      try {
+        const serverData = await loadSettingsFromServer(birthday);
+        if (serverData && (serverData.savedNames?.length > 0 || serverData.reminders?.length > 0 || Object.keys(serverData.notificationSettings || {}).length > 0)) {
+          // Server has data — use it and update localStorage
+          const s = serverData.notificationSettings || {};
+          setBSettings(s.birthday || bSettings);
+          setNameDayAlerts(s.nameDayAlerts || false);
+          setNameDayDays(s.nameDayAlertDays || [0, 1, 3, 7]);
+          setReminders(serverData.reminders || []);
+          localStorage.setItem('savedNameDays', JSON.stringify(serverData.savedNames || []));
+          localStorage.setItem('customReminders', JSON.stringify(serverData.reminders || []));
+          localStorage.setItem('notificationSettings', JSON.stringify(s));
+          setLastSync(new Date().toLocaleTimeString('hu-HU'));
+        } else {
+          // No server data — load from localStorage
+          const saved = localStorage.getItem('notificationSettings');
+          if (saved) {
+            const s = JSON.parse(saved);
+            setBSettings(s.birthday || bSettings);
+            setNameDayAlerts(s.nameDayAlerts || false);
+            setNameDayDays(s.nameDayAlertDays || [0, 1, 3, 7]);
+          }
+          setReminders(JSON.parse(localStorage.getItem('customReminders') || '[]'));
+        }
+      } catch (e) {
+        const saved = localStorage.getItem('notificationSettings');
+        if (saved) {
+          const s = JSON.parse(saved);
+          setBSettings(s.birthday || bSettings);
+          setNameDayAlerts(s.nameDayAlerts || false);
+          setNameDayDays(s.nameDayAlertDays || [0, 1, 3, 7]);
+        }
+        setReminders(JSON.parse(localStorage.getItem('customReminders') || '[]'));
+      } finally {
+        setSyncing(false);
+      }
+    };
+
+    loadSettings();
+  }, [birthday]);
+
+  // Reminder checker
   useEffect(() => {
     const checkReminders = () => {
       const now = new Date();
@@ -70,9 +108,7 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
 
       for (const r of currentReminders) {
         if (!r.active) continue;
-        const rH = parseInt(r.hour || '8');
-        const rM = parseInt(r.minute || '0');
-        if (nowH !== rH || nowM !== rM) continue;
+        if (parseInt(r.hour || '8') !== nowH || parseInt(r.minute || '0') !== nowM) continue;
 
         const notifKey = `reminder_fired_${r.id}_${todayStr}_${nowH}_${nowM}`;
         if (localStorage.getItem(notifKey)) continue;
@@ -94,11 +130,7 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
           fetch('/api/push/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: `⏰ ${r.name}`,
-              body: r.type === 'recurring' ? 'Ismétlődő emlékeztető!' : 'Emlékeztető!',
-              tag: `reminder-${r.id}`,
-            }),
+            body: JSON.stringify({ title: `⏰ ${r.name}`, body: r.type === 'recurring' ? 'Ismétlődő emlékeztető!' : 'Emlékeztető!', tag: `reminder-${r.id}` }),
           }).catch(() => {
             if (Notification.permission === 'granted') {
               new Notification(`⏰ ${r.name}`, { body: 'Emlékeztető!', icon: '/icon-192.png' });
@@ -114,9 +146,29 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
     return () => clearInterval(interval);
   }, []);
 
+  // Debounced sync to server
+  const syncToServer = (data: { bSettings?: any; nameDayAlerts?: boolean; nameDayDays?: number[]; reminders?: Reminder[] }) => {
+    if (syncTimeout.current) clearTimeout(syncTimeout.current);
+    syncTimeout.current = setTimeout(async () => {
+      const currentSettings = JSON.parse(localStorage.getItem('notificationSettings') || '{}');
+      const savedNames = JSON.parse(localStorage.getItem('savedNameDays') || '[]');
+      const currentReminders = JSON.parse(localStorage.getItem('customReminders') || '[]');
+      setSyncing(true);
+      await syncSettingsToServer(birthday, {
+        savedNames,
+        reminders: data.reminders ?? currentReminders,
+        notificationSettings: currentSettings,
+      });
+      setLastSync(new Date().toLocaleTimeString('hu-HU'));
+      setSyncing(false);
+    }, 1000);
+  };
+
   const saveSettings = (updates: any) => {
     const current = JSON.parse(localStorage.getItem('notificationSettings') || '{}');
-    localStorage.setItem('notificationSettings', JSON.stringify({ ...current, ...updates }));
+    const merged = { ...current, ...updates };
+    localStorage.setItem('notificationSettings', JSON.stringify(merged));
+    syncToServer({});
   };
 
   const handleEnablePush = async () => {
@@ -161,6 +213,7 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
     const updated = [...reminders, reminder];
     setReminders(updated);
     localStorage.setItem('customReminders', JSON.stringify(updated));
+    syncToServer({ reminders: updated });
     setShowReminderForm(false);
     setNewReminder({ name: '', type: 'once', hour: '08', minute: '00', date: '', days: [], weeks: 1, startDate: new Date().toISOString().split('T')[0], active: true });
   };
@@ -169,12 +222,14 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
     const updated = reminders.filter(r => r.id !== id);
     setReminders(updated);
     localStorage.setItem('customReminders', JSON.stringify(updated));
+    syncToServer({ reminders: updated });
   };
 
   const toggleReminderActive = (id: string) => {
     const updated = reminders.map(r => r.id === id ? { ...r, active: !r.active } : r);
     setReminders(updated);
     localStorage.setItem('customReminders', JSON.stringify(updated));
+    syncToServer({ reminders: updated });
   };
 
   const toggleDay = (d: number) => {
@@ -209,9 +264,19 @@ export default function NotificationSettings({ birthday }: NotificationSettingsP
         <div className="fixed inset-x-0 bottom-0 z-50 md:absolute md:inset-auto md:right-0 md:top-full md:bottom-auto md:mt-2">
           <Card className="w-full md:w-96 bg-white dark:bg-gray-800 shadow-2xl overflow-hidden rounded-t-2xl md:rounded-xl">
 
-            {/* Mobile drag handle */}
             <div className="md:hidden flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+            </div>
+
+            {/* Sync status */}
+            <div className="px-4 pt-3 pb-1 flex items-center gap-2">
+              {syncing ? (
+                <span className="text-xs text-blue-500">🔄 Szinkronizálás...</span>
+              ) : lastSync ? (
+                <span className="text-xs text-green-500">✅ Szinkronizálva {lastSync}</span>
+              ) : (
+                <span className="text-xs text-gray-400">☁️ Több eszközön szinkronizált</span>
+              )}
             </div>
 
             {/* Push header */}
