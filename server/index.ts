@@ -110,8 +110,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 
-app.get('/balint', async (req, res) => {
-  const payload = JSON.stringify({ title: '🐣 EASTER EGG', body: 'Iratkozz fel a Bálint Kalandjai youtube csatornára!', tag: 'easter-egg' });
+app.get('/api/push/test', async (req, res) => {
+  const payload = JSON.stringify({ title: '🧪 Teszt értesítés', body: 'Működik!', tag: 'test' });
   const results = await Promise.allSettled(
     subscriptions.map(sub => webpush.sendNotification(sub, payload))
   );
