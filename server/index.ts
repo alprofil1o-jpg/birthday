@@ -191,3 +191,4 @@ export async function startServer(port) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   startServer(process.env.PORT || 3001);
 }
+console.log("DATABASE_URL:", process.env.DATABASE_URL);
