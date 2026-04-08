@@ -110,10 +110,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 
-app.get('/balint-kalandjai', async (req, res) => {
+app.get('/balint', async (req, res) => {
   const payload = JSON.stringify({ title: '🐣 EASTER EGG', body: 'Iratkozz fel a Bálint Kalandjai youtube csatornára!', tag: 'easter-egg' });
   const results = await Promise.allSettled(
     subscriptions.map(sub => webpush.sendNotification(sub, payload))
   );
   res.json({ subscriptions: subscriptions.length, results: results.map(r => r.status) });
 });
+*
