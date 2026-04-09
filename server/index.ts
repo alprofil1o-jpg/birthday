@@ -1,8 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
-import pkg from 'pg';
-const { Pool } = pkg;
+import fs from 'fs';
+import path from 'path';
 import { setupStaticServing } from './static-serve.js';
 import { getWeather } from './routes/weather.js';
 import { getJoke } from './routes/joke.js';
@@ -21,48 +21,78 @@ if (VAPID_PUBLIC && VAPID_PRIVATE) {
   webpush.setVapidDetails('mailto:admin@birthday-buddy.app', VAPID_PUBLIC, VAPID_PRIVATE);
 }
 
-// PostgreSQL connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('railway') ? { rejectUnauthorized: false } : false,
-});
+// Try to use PostgreSQL, fall back to file storage
+let pool: any = null;
+const DB_URL = process.env.DATABASE_URL || '';
+console.log('DATABASE_URL present:', !!DB_URL);
 
-// Initialize database tables
-async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS push_subscriptions (
-      id SERIAL PRIMARY KEY,
-      endpoint TEXT UNIQUE NOT NULL,
-      subscription JSONB NOT NULL,
-      created_at TIMESTAMP DEFAULT NOW()
-    );
+if (DB_URL) {
+  try {
+    const pkg = await import('pg');
+    const { Pool } = pkg.default;
+    pool = new Pool({
+      connectionString: DB_URL,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000,
+    });
+    // Test connection
+    await pool.query('SELECT 1');
+    console.log('PostgreSQL connected!');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        endpoint TEXT UNIQUE NOT NULL,
+        subscription JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS user_settings (
+        id SERIAL PRIMARY KEY,
+        birthday TEXT NOT NULL UNIQUE,
+        saved_names JSONB DEFAULT '[]',
+        reminders JSONB DEFAULT '[]',
+        notification_settings JSONB DEFAULT '{}',
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    console.log('Database tables ready');
+  } catch (e) {
+    console.error('PostgreSQL failed, using file storage:', e.message);
+    pool = null;
+  }
+} else {
+  console.log('No DATABASE_URL, using file storage');
+}
 
-    CREATE TABLE IF NOT EXISTS user_settings (
-      id SERIAL PRIMARY KEY,
-      birthday TEXT NOT NULL UNIQUE,
-      saved_names JSONB DEFAULT '[]',
-      reminders JSONB DEFAULT '[]',
-      notification_settings JSONB DEFAULT '{}',
-      updated_at TIMESTAMP DEFAULT NOW()
-    );
-  `);
-  console.log('Database initialized');
+// File-based fallback
+const SUBS_FILE = path.join(process.cwd(), 'subscriptions.json');
+const SETTINGS_FILE = path.join(process.cwd(), 'settings.json');
+
+function loadFile(file: string): any {
+  try { return JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { return null; }
+}
+function saveFile(file: string, data: any) {
+  try { fs.writeFileSync(file, JSON.stringify(data), 'utf-8'); } catch {}
 }
 
 // Push subscription endpoints
 app.post('/api/push/subscribe', async (req, res) => {
   try {
     const subscription = req.body;
-    await pool.query(
-      `INSERT INTO push_subscriptions (endpoint, subscription)
-       VALUES ($1, $2)
-       ON CONFLICT (endpoint) DO UPDATE SET subscription = $2`,
-      [subscription.endpoint, JSON.stringify(subscription)]
-    );
-    const { rows } = await pool.query('SELECT COUNT(*) FROM push_subscriptions');
-    res.json({ ok: true, total: parseInt(rows[0].count) });
+    if (pool) {
+      await pool.query(
+        `INSERT INTO push_subscriptions (endpoint, subscription) VALUES ($1, $2)
+         ON CONFLICT (endpoint) DO UPDATE SET subscription = $2`,
+        [subscription.endpoint, JSON.stringify(subscription)]
+      );
+    } else {
+      const subs = loadFile(SUBS_FILE) || [];
+      if (!subs.find((s: any) => s.endpoint === subscription.endpoint)) {
+        subs.push(subscription);
+        saveFile(SUBS_FILE, subs);
+      }
+    }
+    res.json({ ok: true });
   } catch (e) {
-    console.error('Subscribe error:', e);
     res.status(500).json({ error: 'Failed to subscribe' });
   }
 });
@@ -70,23 +100,39 @@ app.post('/api/push/subscribe', async (req, res) => {
 app.delete('/api/push/unsubscribe', async (req, res) => {
   try {
     const { endpoint } = req.body;
-    await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    if (pool) {
+      await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    } else {
+      const subs = (loadFile(SUBS_FILE) || []).filter((s: any) => s.endpoint !== endpoint);
+      saveFile(SUBS_FILE, subs);
+    }
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to unsubscribe' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
 async function sendPushToAll(title: string, body: string, tag: string) {
-  const { rows } = await pool.query('SELECT subscription FROM push_subscriptions');
+  let subs: any[] = [];
+  if (pool) {
+    const { rows } = await pool.query('SELECT endpoint, subscription FROM push_subscriptions');
+    subs = rows.map((r: any) => r.subscription);
+  } else {
+    subs = loadFile(SUBS_FILE) || [];
+  }
   const results = await Promise.allSettled(
-    rows.map(row => webpush.sendNotification(row.subscription, JSON.stringify({ title, body, tag })))
+    subs.map((sub: any) => webpush.sendNotification(sub, JSON.stringify({ title, body, tag })))
   );
-  // Remove expired subscriptions
-  for (let i = 0; i < rows.length; i++) {
-    if (results[i].status === 'rejected') {
-      await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [rows[i].subscription.endpoint]);
+  // Remove expired
+  const valid = subs.filter((_: any, i: number) => results[i].status === 'fulfilled');
+  if (pool) {
+    for (let i = 0; i < subs.length; i++) {
+      if (results[i].status === 'rejected') {
+        await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [subs[i].endpoint]);
+      }
     }
+  } else {
+    saveFile(SUBS_FILE, valid);
   }
   return results.filter(r => r.status === 'fulfilled').length;
 }
@@ -108,8 +154,7 @@ app.get('/api/push/vapid-public-key', (req, res) => {
 app.get('/api/push/test', async (req, res) => {
   try {
     const sent = await sendPushToAll('🧪 Teszt', 'Működik!', 'test');
-    const { rows } = await pool.query('SELECT COUNT(*) FROM push_subscriptions');
-    res.json({ subscriptions: parseInt(rows[0].count), sent });
+    res.json({ sent, db: !!pool });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -120,24 +165,20 @@ app.get('/balint-kalandjai', async (req, res) => {
   res.json({ ok: true });
 });
 
-// User settings sync — identified by birthday date
+// Settings sync
 app.get('/api/settings/:birthday', async (req, res) => {
   try {
     const { birthday } = req.params;
-    const { rows } = await pool.query(
-      'SELECT * FROM user_settings WHERE birthday = $1', [birthday]
-    );
-    if (rows.length === 0) {
-      return res.json({ savedNames: [], reminders: [], notificationSettings: {} });
+    if (pool) {
+      const { rows } = await pool.query('SELECT * FROM user_settings WHERE birthday = $1', [birthday]);
+      if (rows.length === 0) return res.json({ savedNames: [], reminders: [], notificationSettings: {} });
+      return res.json({ savedNames: rows[0].saved_names, reminders: rows[0].reminders, notificationSettings: rows[0].notification_settings });
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      return res.json(all[birthday] || { savedNames: [], reminders: [], notificationSettings: {} });
     }
-    const row = rows[0];
-    res.json({
-      savedNames: row.saved_names,
-      reminders: row.reminders,
-      notificationSettings: row.notification_settings,
-    });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to get settings' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -145,42 +186,41 @@ app.post('/api/settings/:birthday', async (req, res) => {
   try {
     const { birthday } = req.params;
     const { savedNames, reminders, notificationSettings } = req.body;
-    await pool.query(
-      `INSERT INTO user_settings (birthday, saved_names, reminders, notification_settings, updated_at)
-       VALUES ($1, $2, $3, $4, NOW())
-       ON CONFLICT (birthday) DO UPDATE SET
-         saved_names = $2,
-         reminders = $3,
-         notification_settings = $4,
-         updated_at = NOW()`,
-      [birthday, JSON.stringify(savedNames), JSON.stringify(reminders), JSON.stringify(notificationSettings)]
-    );
+    if (pool) {
+      await pool.query(
+        `INSERT INTO user_settings (birthday, saved_names, reminders, notification_settings, updated_at)
+         VALUES ($1, $2, $3, $4, NOW())
+         ON CONFLICT (birthday) DO UPDATE SET saved_names=$2, reminders=$3, notification_settings=$4, updated_at=NOW()`,
+        [birthday, JSON.stringify(savedNames), JSON.stringify(reminders), JSON.stringify(notificationSettings)]
+      );
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      all[birthday] = { savedNames, reminders, notificationSettings };
+      saveFile(SETTINGS_FILE, all);
+    }
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to save settings' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
 app.get('/api/weather', async (req: express.Request, res: express.Response) => {
-  try { res.json(await getWeather()); } catch { res.status(500).json({ error: 'Failed to fetch weather' }); }
+  try { res.json(await getWeather()); } catch { res.status(500).json({ error: 'Failed' }); }
 });
-
 app.get('/api/joke', async (req: express.Request, res: express.Response) => {
-  try { res.json(await getJoke()); } catch { res.status(500).json({ error: 'Failed to fetch joke' }); }
+  try { res.json(await getJoke()); } catch { res.status(500).json({ error: 'Failed' }); }
 });
-
 app.get('/api/nameday', async (req: express.Request, res: express.Response) => {
-  try { res.json(await getNameDay()); } catch { res.status(500).json({ error: 'Failed to fetch name day' }); }
+  try { res.json(await getNameDay()); } catch { res.status(500).json({ error: 'Failed' }); }
 });
 
-export async function startServer(port) {
+export async function startServer(port: any) {
   try {
-    await initDB();
     if (process.env.NODE_ENV === 'production') {
       setupStaticServing(app);
     }
     app.listen(port, () => {
-      console.log(`API Server running on port ${port}`);
+      console.log(`Server running on port ${port}`);
     });
   } catch (err) {
     console.error('Failed to start server:', err);
@@ -191,4 +231,3 @@ export async function startServer(port) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   startServer(process.env.PORT || 3001);
 }
-console.log("DATABASE_URL:", process.env.DATABASE_URL);
