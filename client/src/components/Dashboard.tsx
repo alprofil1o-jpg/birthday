@@ -7,6 +7,10 @@ import DailyJoke from '../components/widgets/DailyJoke';
 import NameDay from '../components/widgets/NameDay';
 import AgeCounter from '../components/widgets/AgeCounter';
 import Holidays from '../components/widgets/Holidays';
+import CountdownEvent from '../components/widgets/CountdownEvent';
+import Notes from '../components/widgets/Notes';
+import OnThisDay from '../components/widgets/OnThisDay';
+import DailyQuiz from '../components/widgets/DailyQuiz';
 import NotificationSettings from './NotificationSettings';
 import { Button } from '../components/ui/button';
 
@@ -35,7 +39,7 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 pt-safe">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
@@ -61,6 +65,10 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
           <NameDay birthday={birthday} />
           <AgeCounter birthday={birthday} />
           <Holidays />
+          <OnThisDay />
+          <DailyQuiz />
+          <CountdownEvent />
+          <div className="lg:col-span-2"><Notes /></div>
           <div className="lg:col-span-3"><DailyJoke /></div>
         </div>
       </div>
