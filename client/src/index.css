@@ -29,6 +29,7 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
+    --app-bg: #eef2ff;
   }
   .dark {
     --background: 0 0% 0%;
@@ -55,13 +56,41 @@
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+    --app-bg: #111827;
   }
 }
+
 @layer base {
   * {
     @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    background-color: var(--app-bg);
   }
+}
+
+/* Safe area for notch/status bar */
+.pt-safe {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+/* Widget drag handle */
+.drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Dragging state */
+.widget-dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+.widget-dragover {
+  outline: 2px dashed #6366f1;
+  outline-offset: 2px;
+  border-radius: 12px;
 }
