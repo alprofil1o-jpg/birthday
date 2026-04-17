@@ -127,6 +127,12 @@ export default function CountdownEvent() {
 
   const getTotalSecs = () => days * 86400 + hours * 3600 + minutes * 60 + secs;
 
+  const sendSwMessage = (msg: any) => {
+    navigator.serviceWorker?.ready.then(reg => {
+      reg.active?.postMessage(msg);
+    });
+  };
+
   const startTimer = (total?: number) => {
     const t = total ?? getTotalSecs();
     if (t <= 0) return;
@@ -142,26 +148,36 @@ export default function CountdownEvent() {
         clearInterval(intervalRef.current);
         setRunning(false);
         setFinished(true);
-        if (Notification.permission === 'granted') {
-          new Notification('⏰ Időzítő lejárt!', { body: 'Az idő letelt!', icon: '/icon-192.png' });
-        }
+        sendSwMessage({ type: 'timer-stop' });
       }
     }, 500);
     setRunning(true);
+    sendSwMessage({ type: 'timer-start', endTime: endRef.current, name: 'Időzítő' });
   };
 
-  const pause = () => { clearInterval(intervalRef.current); setRunning(false); };
+  const pause = () => {
+    clearInterval(intervalRef.current);
+    setRunning(false);
+    sendSwMessage({ type: 'timer-stop' });
+  };
   const resume = () => {
     if (!remaining || remaining <= 0) return;
     endRef.current = Date.now() + remaining * 1000;
     intervalRef.current = setInterval(() => {
       const left = Math.max(0, Math.ceil((endRef.current - Date.now()) / 1000));
       setRemaining(left);
-      if (left <= 0) { clearInterval(intervalRef.current); setRunning(false); setFinished(true); }
+      if (left <= 0) { clearInterval(intervalRef.current); setRunning(false); setFinished(true); sendSwMessage({ type: 'timer-stop' }); }
     }, 500);
     setRunning(true);
+    sendSwMessage({ type: 'timer-start', endTime: endRef.current, name: 'Időzítő' });
   };
-  const reset = () => { clearInterval(intervalRef.current); setRunning(false); setRemaining(null); setFinished(false); };
+  const reset = () => {
+    clearInterval(intervalRef.current);
+    setRunning(false);
+    setRemaining(null);
+    setFinished(false);
+    sendSwMessage({ type: 'timer-stop' });
+  };
 
   const fmtSecs = (s: number) => {
     const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
