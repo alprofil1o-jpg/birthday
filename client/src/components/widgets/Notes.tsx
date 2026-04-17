@@ -17,15 +17,14 @@ const COLORS = [
   'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
 ];
 
-let globalFlipped = false;
+let flipped = false;
 
 function triggerFlip() {
-  globalFlipped = !globalFlipped;
-  const root = document.getElementById('root');
-  if (root) {
-    root.style.transition = 'transform 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
-    root.style.transform = globalFlipped ? 'rotate(180deg) scaleX(-1)' : 'rotate(0deg) scaleX(1)';
-  }
+  flipped = !flipped;
+  // Apply to body so the entire page flips including status bar area
+  document.body.style.transition = 'transform 0.8s cubic-bezier(0.4,0,0.2,1)';
+  document.body.style.transformOrigin = 'center center';
+  document.body.style.transform = flipped ? 'rotate(180deg)' : 'rotate(0deg)';
 }
 
 export default function Notes() {

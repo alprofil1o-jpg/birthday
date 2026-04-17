@@ -8,6 +8,10 @@ interface Lap {
   diff: number;
 }
 
+function sendSwMsg(msg: any) {
+  navigator.serviceWorker?.ready.then(reg => reg.active?.postMessage(msg));
+}
+
 export default function Stopwatch() {
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -15,10 +19,39 @@ export default function Stopwatch() {
   const startRef = useRef<number>(0);
   const intervalRef = useRef<any>(null);
   const lastLapRef = useRef<number>(0);
+  const swIntervalRef = useRef<any>(null);
 
   useEffect(() => {
-    return () => clearInterval(intervalRef.current);
+    return () => {
+      clearInterval(intervalRef.current);
+      clearInterval(swIntervalRef.current);
+    };
   }, []);
+
+  const fmt = (ms: number) => {
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const cs = Math.floor((ms % 1000) / 10);
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
+  };
+
+  const fmtShort = (ms: number) => {
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  };
+
+  // Send live notification every second while running
+  const startSwNotification = () => {
+    clearInterval(swIntervalRef.current);
+    swIntervalRef.current = setInterval(() => {
+      const currentElapsed = Date.now() - startRef.current;
+      sendSwMsg({
+        type: 'stopwatch-update',
+        time: fmtShort(currentElapsed),
+      });
+    }, 1000);
+  };
 
   const start = () => {
     startRef.current = Date.now() - elapsed;
@@ -26,32 +59,42 @@ export default function Stopwatch() {
       setElapsed(Date.now() - startRef.current);
     }, 10);
     setRunning(true);
+    startSwNotification();
   };
 
   const stop = () => {
     clearInterval(intervalRef.current);
+    clearInterval(swIntervalRef.current);
     setRunning(false);
+    // Send final notification with elapsed time
+    sendSwMsg({
+      type: 'stopwatch-stopped',
+      time: fmt(elapsed),
+    });
+    // Also show local notification
+    if (Notification.permission === 'granted') {
+      new Notification('⏱️ Stopper megállítva', {
+        body: `Mért idő: ${fmt(elapsed)}`,
+        icon: '/icon-192.png',
+        tag: 'stopwatch-result',
+      });
+    }
   };
 
   const reset = () => {
     clearInterval(intervalRef.current);
+    clearInterval(swIntervalRef.current);
     setRunning(false);
     setElapsed(0);
     setLaps([]);
     lastLapRef.current = 0;
+    sendSwMsg({ type: 'stopwatch-stop' });
   };
 
   const lap = () => {
     const diff = elapsed - lastLapRef.current;
     setLaps(prev => [{ id: prev.length + 1, time: elapsed, diff }, ...prev]);
     lastLapRef.current = elapsed;
-  };
-
-  const fmt = (ms: number) => {
-    const m = Math.floor(ms / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    const cs = Math.floor((ms % 1000) / 10);
-    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
   };
 
   const minLap = laps.length > 0 ? Math.min(...laps.map(l => l.diff)) : null;
