@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../../components/ui/card';
 
 interface Note {
@@ -17,14 +17,36 @@ const COLORS = [
   'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
 ];
 
-let flipped = false;
+// Track current rotation globally
+let currentRotation = 0;
 
-function triggerFlip() {
-  flipped = !flipped;
-  // Apply to body so the entire page flips including status bar area
+function applyRotation(deg: number) {
+  currentRotation = ((currentRotation + deg) % 360 + 360) % 360;
   document.body.style.transition = 'transform 0.8s cubic-bezier(0.4,0,0.2,1)';
   document.body.style.transformOrigin = 'center center';
-  document.body.style.transform = flipped ? 'rotate(180deg)' : 'rotate(0deg)';
+  document.body.style.transform = `rotate(${currentRotation}deg)`;
+}
+
+function resetRotation() {
+  currentRotation = 0;
+  document.body.style.transition = 'transform 0.8s cubic-bezier(0.4,0,0.2,1)';
+  document.body.style.transform = 'rotate(0deg)';
+}
+
+function checkEasterEggs(notes: Note[]) {
+  const allText = notes.map(n => n.text.toLowerCase()).join(' ');
+  const hasBalint = allText.includes('bálint') || allText.includes('balint');
+  const hasDerek = allText.includes('derék') || allText.includes('derek');
+
+  let target = 0;
+  if (hasBalint && hasDerek) target = 270; // both = 270
+  else if (hasBalint) target = 180;
+  else if (hasDerek) target = 90;
+
+  currentRotation = target;
+  document.body.style.transition = 'transform 0.8s cubic-bezier(0.4,0,0.2,1)';
+  document.body.style.transformOrigin = 'center center';
+  document.body.style.transform = `rotate(${target}deg)`;
 }
 
 export default function Notes() {
@@ -34,14 +56,11 @@ export default function Notes() {
   const [newText, setNewText] = useState('');
   const [colorIndex, setColorIndex] = useState(0);
   const [showAll, setShowAll] = useState(false);
-  const [flipCount, setFlipCount] = useState(0);
 
-  const checkEasterEgg = (text: string) => {
-    if (text.toLowerCase().includes('bálint') || text.toLowerCase().includes('balint')) {
-      triggerFlip();
-      setFlipCount(c => c + 1);
-    }
-  };
+  // Check Easter Eggs whenever notes change
+  useEffect(() => {
+    checkEasterEggs(notes);
+  }, [notes]);
 
   const saveNotes = (updated: Note[]) => {
     setNotes(updated);
@@ -50,7 +69,6 @@ export default function Notes() {
 
   const addNote = () => {
     if (!newText.trim()) return;
-    checkEasterEgg(newText);
     const note: Note = {
       id: Date.now().toString(),
       text: newText.trim(),
@@ -70,7 +88,6 @@ export default function Notes() {
       <div>
         <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-4 uppercase text-center">
           📝 Gyors jegyzetek
-          {flipCount > 0 && <span className="ml-2 text-xs text-purple-400">🔄 ×{flipCount}</span>}
         </h2>
 
         <div className="flex gap-2 mb-4">
