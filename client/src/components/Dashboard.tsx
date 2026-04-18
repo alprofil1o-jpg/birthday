@@ -276,6 +276,10 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold mb-1">Készítette</p>
               <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">Buday Bálint</p>
             </div>
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold mb-1">Youtube csatorna</p>
+              <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400"><a href="https://www.youtube.com/@BálintKalandjai" target="_blank" rel="noopener noreferrer">Bálint Kalandjai</a></p>
+            </div>
             <div className="text-xs text-gray-400 space-y-1 mb-6">
               <p>React + TypeScript + Tailwind</p>
               <p>Express + PostgreSQL</p>
