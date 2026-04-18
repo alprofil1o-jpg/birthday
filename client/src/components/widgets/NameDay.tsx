@@ -44,6 +44,14 @@ const nameDays: { [key: string]: string } = {
   '12-21':'Tamás','12-22':'Franciska','12-23':'Viktória','12-24':'Ádám és Éva','12-25':'Karácsony','12-26':'István','12-27':'János','12-28':'Szentek','12-29':'Tamás','12-30':'Ágnes','12-31':'Szilveszter',
 };
 
+// Leggyakoribb magyar keresztnevek
+const POPULAR_NAMES = [
+  'Anna','Péter','László','István','Katalin','Erzsébet','Zoltán','Gábor','Attila','Szabolcs',
+  'Ádám','Bálint','Dávid','Tamás','Máté','Balázs','Bence','Benedek','Márk','Dániel',
+  'Zsófia','Eszter','Réka','Nóra','Veronika','Krisztina','Judit','Éva','Mária','Ágnes',
+  'Richárd','András','Sándor','Ferenc','Csaba','Gergely','Norbert','Tibor','Béla','Viktor',
+];
+
 function findNextNameDay(names: string[]): { name: string; daysUntil: number } | null {
   if (names.length === 0) return null;
   const today = new Date();
@@ -71,6 +79,7 @@ export default function NameDay({ birthday }: NameDayProps) {
   const [showPanel, setShowPanel] = useState(false);
   const [inputName, setInputName] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     fetch('/api/nameday')
@@ -96,6 +105,18 @@ export default function NameDay({ birthday }: NameDayProps) {
     loadNames();
   }, [birthday]);
 
+  // Filter suggestions based on input
+  useEffect(() => {
+    if (inputName.length < 1) {
+      setSuggestions([]);
+      return;
+    }
+    const filtered = POPULAR_NAMES.filter(n =>
+      n.toLowerCase().startsWith(inputName.toLowerCase()) && !savedNames.includes(n)
+    ).slice(0, 6);
+    setSuggestions(filtered);
+  }, [inputName, savedNames]);
+
   const syncNames = async (names: string[]) => {
     localStorage.setItem('savedNameDays', JSON.stringify(names));
     setSyncing(true);
@@ -105,12 +126,13 @@ export default function NameDay({ birthday }: NameDayProps) {
     setSyncing(false);
   };
 
-  const addName = async () => {
-    const trimmed = inputName.trim();
+  const addName = async (name?: string) => {
+    const trimmed = (name || inputName).trim();
     if (!trimmed || savedNames.includes(trimmed)) return;
     const updated = [...savedNames, trimmed];
     setSavedNames(updated);
     setInputName('');
+    setSuggestions([]);
     await syncNames(updated);
   };
 
@@ -158,14 +180,43 @@ export default function NameDay({ birthday }: NameDayProps) {
 
         {showPanel && (
           <div className="mt-3 text-left">
-            <div className="flex gap-2 mb-2">
-              <input type="text" value={inputName}
-                onChange={e => setInputName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addName()}
-                placeholder="Írj be egy nevet..."
-                className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-              <button onClick={addName} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">+</button>
+            {/* Popular names quick-add */}
+            {savedNames.length === 0 && (
+              <div className="mb-3">
+                <p className="text-xs text-gray-400 mb-2">Népszerű nevek:</p>
+                <div className="flex flex-wrap gap-1">
+                  {POPULAR_NAMES.slice(0, 12).map(name => (
+                    <button key={name} onClick={() => addName(name)}
+                      className="px-2 py-1 text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-full border border-purple-200 dark:border-purple-800 hover:bg-purple-100 transition-colors">
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Input with autocomplete */}
+            <div className="relative flex gap-2 mb-2">
+              <div className="flex-1 relative">
+                <input type="text" value={inputName}
+                  onChange={e => setInputName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addName()}
+                  placeholder="Írj be egy nevet..."
+                  className="w-full text-sm px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                {suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-20 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg mt-1 overflow-hidden">
+                    {suggestions.map(s => (
+                      <button key={s} onClick={() => addName(s)}
+                        className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 transition-colors">
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => addName()} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700">+</button>
             </div>
+
             <div className="flex flex-wrap gap-2">
               {savedNames.map(name => (
                 <span key={name} className="flex items-center gap-1 px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full text-sm">

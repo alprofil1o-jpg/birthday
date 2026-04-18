@@ -125,6 +125,76 @@ export default function CountdownEvent() {
     return () => { clearInterval(i); clearInterval(intervalRef.current); };
   }, []);
 
+  // Event notifications — check every minute
+  useEffect(() => {
+    const checkEventNotifs = () => {
+      const currentEvents: any[] = JSON.parse(localStorage.getItem('countdownEvents') || '[]');
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      for (const ev of currentEvents) {
+        const diff = new Date(ev.date).getTime() - today.getTime();
+        if (diff <= 0) continue;
+        const daysLeft = Math.floor(diff / 86400000);
+        const hoursLeft = Math.floor((diff % 86400000) / 3600000);
+        const minsLeft = Math.floor((diff % 3600000) / 60000);
+
+        // Send notification for: today, 1 day, 3 days, 7 days before
+        const alertDays = [0, 1, 3, 7];
+        if (!alertDays.includes(daysLeft)) continue;
+
+        const notifKey = `event_notif_${ev.id}_${todayStr}`;
+        if (localStorage.getItem(notifKey)) continue;
+
+        let body = '';
+        if (daysLeft === 0) body = `Ma van! Még ${hoursLeft} óra ${minsLeft} perc`;
+        else if (daysLeft === 1) body = 'Holnap!';
+        else body = `${daysLeft} nap múlva`;
+
+        fetch('/api/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `${ev.emoji} ${ev.name}`,
+            body,
+            tag: `event-${ev.id}`,
+          }),
+        }).catch(() => {
+          if (Notification.permission === 'granted') {
+            new Notification(`${ev.emoji} ${ev.name}`, { body, icon: '/icon-192.png' });
+          }
+        });
+        localStorage.setItem(notifKey, '1');
+      }
+    };
+
+    checkEventNotifs();
+    const notifInterval = setInterval(checkEventNotifs, 60000);
+    return () => clearInterval(notifInterval);
+  }, []);
+
+  // Live event notification update — every 10s when event is today
+  useEffect(() => {
+    const liveCheck = () => {
+      const currentEvents: any[] = JSON.parse(localStorage.getItem('countdownEvents') || '[]');
+      const today = new Date();
+      for (const ev of currentEvents) {
+        const diff = new Date(ev.date).getTime() - today.getTime();
+        if (diff <= 0 || diff > 86400000) continue; // only today's events
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        navigator.serviceWorker?.ready.then(reg => reg.active?.postMessage({
+          type: 'event-countdown',
+          name: `${ev.emoji} ${ev.name}`,
+          time: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`,
+        }));
+      }
+    };
+    const liveInterval = setInterval(liveCheck, 10000);
+    return () => clearInterval(liveInterval);
+  }, []);
+
   const getTotalSecs = () => days * 86400 + hours * 3600 + minutes * 60 + secs;
 
   const sendSwMessage = (msg: any) => {

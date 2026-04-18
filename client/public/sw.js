@@ -2,7 +2,6 @@ let timerInterval = null;
 let timerEnd = null;
 let timerName = '';
 
-// ---- Timer notifications ----
 self.addEventListener('message', (event) => {
   const data = event.data;
   if (!data) return;
@@ -39,6 +38,17 @@ self.addEventListener('message', (event) => {
   }
   if (data.type === 'stopwatch-stop') {
     self.registration.getNotifications({ tag: 'stopwatch-running' }).then(ns => ns.forEach(n => n.close()));
+  }
+  if (data.type === 'event-countdown') {
+    self.registration.showNotification('📅 ' + data.name, {
+      body: data.time + ' van hátra',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'event-live-' + data.name,
+      renotify: false,
+      silent: true,
+      requireInteraction: false,
+    });
   }
 });
 
@@ -89,7 +99,6 @@ function stopTimerNotification() {
   self.registration.getNotifications({ tag: 'timer-running' }).then(ns => ns.forEach(n => n.close()));
 }
 
-// ---- Push notifications ----
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : {};
   if (data.type === 'timer-start') {
@@ -98,10 +107,8 @@ self.addEventListener('push', (event) => {
     startTimerNotification();
     return;
   }
-  if (data.type === 'timer-stop') {
-    stopTimerNotification();
-    return;
-  }
+  if (data.type === 'timer-stop') { stopTimerNotification(); return; }
+
   const title = data.title || 'Birthday Buddy';
   const options = {
     body: data.body || '',
@@ -131,12 +138,6 @@ self.addEventListener('notificationclick', (event) => {
       return clients.openWindow(event.notification.data?.url || '/');
     })
   );
-});
-
-// ---- Pull to refresh: change favicon to cake ----
-self.addEventListener('fetch', (event) => {
-  // Let all requests pass through normally
-  return;
 });
 
 self.addEventListener('install', () => self.skipWaiting());
