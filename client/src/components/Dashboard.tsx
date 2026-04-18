@@ -8,7 +8,7 @@ import NameDay from '../components/widgets/NameDay';
 import AgeCounter from '../components/widgets/AgeCounter';
 import Holidays from '../components/widgets/Holidays';
 import CountdownEvent from '../components/widgets/CountdownEvent';
-import Notes from '../components/widgets/notes';
+import Notes from '../components/widgets/notes.tsx';
 import OnThisDay from '../components/widgets/OnThisDay';
 import DailyQuiz from '../components/widgets/DailyQuiz';
 import Stopwatch from '../components/widgets/Stopwatch';
