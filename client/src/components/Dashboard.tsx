@@ -270,7 +270,7 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowSettings(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 w-80 shadow-2xl text-center" onClick={e => e.stopPropagation()}>
             <div className="text-5xl mb-4">🎂</div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Birthday Buddy</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Szülinap számláló</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">v2.0</p>
             <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold mb-1">Készítette</p>
