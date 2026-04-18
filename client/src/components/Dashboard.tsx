@@ -8,7 +8,7 @@ import NameDay from '../components/widgets/NameDay';
 import AgeCounter from '../components/widgets/AgeCounter';
 import Holidays from '../components/widgets/Holidays';
 import CountdownEvent from '../components/widgets/CountdownEvent';
-import Notes from '../components/widgets/Notes';
+import Notes from '../components/widgets/notes.tsx';
 import OnThisDay from '../components/widgets/OnThisDay';
 import DailyQuiz from '../components/widgets/DailyQuiz';
 import Stopwatch from '../components/widgets/Stopwatch';
@@ -30,7 +30,7 @@ const DEFAULT_ORDER = [
 
 const WIDGET_LABELS: Record<string, string> = {
   clock: '🕐 Óra', birthday: '🎂 Születésnap számláló', weather: '🌤 Időjárás',
-  nameday: '👤 Névnap', age: '🎂 Életkor', notifications: '🔔 Értesítések',
+  nameday: '👤 Névnap', age: '🎂 Életkor', notifications: '⚙️ Beállítások',
   holidays: '🎉 Ünnepek', onthisday: '📰 Ezen a napon', quiz: '🎯 Napi kvíz',
   countdown: '⏰ Időzítő', stopwatch: '⏱️ Stopper', notes: '📝 Jegyzetek',
   settings: '⚙️ Beállítások', joke: '😄 Napi vicc',
