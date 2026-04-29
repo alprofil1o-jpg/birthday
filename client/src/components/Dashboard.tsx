@@ -8,7 +8,7 @@ import NameDay from '../components/widgets/NameDay';
 import AgeCounter from '../components/widgets/AgeCounter';
 import Holidays from '../components/widgets/Holidays';
 import CountdownEvent from '../components/widgets/CountdownEvent';
-import Notes from '../components/widgets/Notes';
+import Notes from '../components/widgets/notes';
 import OnThisDay from '../components/widgets/OnThisDay';
 import DailyQuiz from '../components/widgets/DailyQuiz';
 import Stopwatch from '../components/widgets/Stopwatch';
@@ -37,6 +37,15 @@ const WIDGET_LABELS: Record<string, string> = {
 };
 
 export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps) {
+  const [isSpinning, setIsSpinning] = useState(false);
+
+  const handleNotesChange = (value: string) => {
+    if (value.toLowerCase() === 'ábel' || value.toLowerCase() === 'abel') {
+      setIsSpinning(true);
+      setTimeout(() => setIsSpinning(false), 800);
+    }
+  };
+
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
@@ -137,7 +146,7 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
       case 'quiz': return <DailyQuiz />;
       case 'countdown': return <CountdownEvent />;
       case 'stopwatch': return <Stopwatch />;
-      case 'notes': return <div className="md:col-span-2"><Notes /></div>;
+      case 'notes': return <div className="md:col-span-2"><Notes onTextChange={handleNotesChange} /></div>;
       case 'settings': return <AppSettings birthday={birthday} />;
       case 'joke': return <div className="lg:col-span-3"><DailyJoke /></div>;
       default: return null;
@@ -160,10 +169,14 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spin360page { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .page-spin { animation: spin360page 0.8s ease-in-out; }
+      `}</style>
 
       <div
-        className="min-h-screen p-4 pt-safe transition-colors duration-300"
+        className={`min-h-screen p-4 pt-safe transition-colors duration-300${isSpinning ? ' page-spin' : ''}`}
         style={{
           background: isDark ? 'linear-gradient(135deg, #111827 0%, #1f2937 100%)' : 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%)',
           transform: pullDistance > 0 ? `translateY(${pullDistance}px)` : undefined,
