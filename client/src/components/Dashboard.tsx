@@ -33,7 +33,7 @@ const WIDGET_LABELS: Record<string, string> = {
   nameday: '👤 Névnap', age: '🎂 Életkor', notifications: '⚙️ Beállítások',
   holidays: '🎉 Ünnepek', onthisday: '📰 Ezen a napon', quiz: '🎯 Napi kvíz',
   countdown: '⏰ Időzítő', stopwatch: '⏱️ Stopper', notes: '📝 Jegyzetek',
-  settings: '⚙️ Beállítások', joke: '😄 Napi vicc',
+  settings: 'ℹ️ Információk', joke: '😄 Napi vicc',
 };
 
 export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps) {
