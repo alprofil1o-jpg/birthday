@@ -37,9 +37,24 @@ function checkEasterEggs(notes: Note[]) {
   const allText = notes.map(n => n.text.toLowerCase()).join(' ');
   const hasBalint = allText.includes('bálint') || allText.includes('balint');
   const hasDerek = allText.includes('derék') || allText.includes('derek');
+  const hasAbel = allText.includes('ábel') || allText.includes('abel');
+
+  // Ábel: 360 fokos animált pörgetés, majd visszaáll az eredeti állásba
+  if (hasAbel) {
+    const before = currentRotation;
+    const after = before + 360;
+    document.body.style.transition = 'transform 0.8s cubic-bezier(0.4,0,0.2,1)';
+    document.body.style.transformOrigin = 'center center';
+    document.body.style.transform = `rotate(${after}deg)`;
+    setTimeout(() => {
+      document.body.style.transition = 'none';
+      document.body.style.transform = `rotate(${before}deg)`;
+    }, 850);
+    return;
+  }
 
   let target = 0;
-  if (hasBalint && hasDerek) target = 270; // both = 270
+  if (hasBalint && hasDerek) target = 270;
   else if (hasBalint) target = 180;
   else if (hasDerek) target = 90;
 
