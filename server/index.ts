@@ -53,6 +53,36 @@ if (DB_URL) {
         notification_settings JSONB DEFAULT '{}',
         updated_at TIMESTAMP DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS notes (
+        id TEXT PRIMARY KEY,
+        birthday TEXT NOT NULL,
+        text TEXT NOT NULL,
+        color TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        created_ts TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS countdown_events (
+        id TEXT PRIMARY KEY,
+        birthday TEXT NOT NULL,
+        name TEXT NOT NULL,
+        date TEXT NOT NULL,
+        emoji TEXT NOT NULL DEFAULT '🎯',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS saved_timers (
+        id TEXT PRIMARY KEY,
+        birthday TEXT NOT NULL,
+        name TEXT NOT NULL,
+        emoji TEXT NOT NULL DEFAULT '⏱️',
+        total_seconds INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS app_settings (
+        birthday TEXT PRIMARY KEY,
+        lock_rotation BOOLEAN DEFAULT false,
+        disable_easter_eggs BOOLEAN DEFAULT false,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
     `);
     console.log('Database tables ready');
   } catch (e) {
@@ -202,6 +232,208 @@ app.post('/api/settings/:birthday', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: 'Failed' });
   }
+});
+
+// ── Notes ────────────────────────────────────────────────────────────────────
+
+app.get('/api/notes/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    if (pool) {
+      const { rows } = await pool.query(
+        'SELECT id, text, color, created_at FROM notes WHERE birthday = $1 ORDER BY created_ts DESC',
+        [birthday]
+      );
+      return res.json(rows.map((r: any) => ({ id: r.id, text: r.text, color: r.color, createdAt: r.created_at })));
+    }
+    const all = loadFile(SETTINGS_FILE) || {};
+    return res.json((all[birthday + '_notes']) || []);
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/notes/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    const { id, text, color, createdAt } = req.body;
+    if (pool) {
+      await pool.query(
+        `INSERT INTO notes (id, birthday, text, color, created_at) VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (id) DO UPDATE SET text=$3, color=$4, created_at=$5`,
+        [id, birthday, text, color, createdAt]
+      );
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      const key = birthday + '_notes';
+      const notes = all[key] || [];
+      const idx = notes.findIndex((n: any) => n.id === id);
+      if (idx >= 0) notes[idx] = { id, text, color, createdAt };
+      else notes.unshift({ id, text, color, createdAt });
+      all[key] = notes;
+      saveFile(SETTINGS_FILE, all);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.delete('/api/notes/:birthday/:id', async (req, res) => {
+  try {
+    const { birthday, id } = req.params;
+    if (pool) {
+      await pool.query('DELETE FROM notes WHERE id=$1 AND birthday=$2', [id, birthday]);
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      const key = birthday + '_notes';
+      all[key] = (all[key] || []).filter((n: any) => n.id !== id);
+      saveFile(SETTINGS_FILE, all);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// ── Countdown Events ──────────────────────────────────────────────────────────
+
+app.get('/api/events/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    if (pool) {
+      const { rows } = await pool.query(
+        'SELECT id, name, date, emoji FROM countdown_events WHERE birthday=$1 ORDER BY date ASC',
+        [birthday]
+      );
+      return res.json(rows);
+    }
+    const all = loadFile(SETTINGS_FILE) || {};
+    return res.json(all[birthday + '_events'] || []);
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/events/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    const { id, name, date, emoji } = req.body;
+    if (pool) {
+      await pool.query(
+        `INSERT INTO countdown_events (id, birthday, name, date, emoji) VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (id) DO UPDATE SET name=$3, date=$4, emoji=$5`,
+        [id, birthday, name, date, emoji]
+      );
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      const key = birthday + '_events';
+      const events = all[key] || [];
+      const idx = events.findIndex((e: any) => e.id === id);
+      if (idx >= 0) events[idx] = { id, name, date, emoji };
+      else events.push({ id, name, date, emoji });
+      all[key] = events;
+      saveFile(SETTINGS_FILE, all);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.delete('/api/events/:birthday/:id', async (req, res) => {
+  try {
+    const { birthday, id } = req.params;
+    if (pool) {
+      await pool.query('DELETE FROM countdown_events WHERE id=$1 AND birthday=$2', [id, birthday]);
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      const key = birthday + '_events';
+      all[key] = (all[key] || []).filter((e: any) => e.id !== id);
+      saveFile(SETTINGS_FILE, all);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// ── Saved Timers ──────────────────────────────────────────────────────────────
+
+app.get('/api/timers/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    if (pool) {
+      const { rows } = await pool.query(
+        'SELECT id, name, emoji, total_seconds as "totalSeconds" FROM saved_timers WHERE birthday=$1 ORDER BY created_at ASC',
+        [birthday]
+      );
+      return res.json(rows);
+    }
+    const all = loadFile(SETTINGS_FILE) || {};
+    return res.json(all[birthday + '_timers'] || []);
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/timers/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    const { id, name, emoji, totalSeconds } = req.body;
+    if (pool) {
+      await pool.query(
+        `INSERT INTO saved_timers (id, birthday, name, emoji, total_seconds) VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (id) DO UPDATE SET name=$3, emoji=$4, total_seconds=$5`,
+        [id, birthday, name, emoji, totalSeconds]
+      );
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      const key = birthday + '_timers';
+      const timers = all[key] || [];
+      const idx = timers.findIndex((t: any) => t.id === id);
+      if (idx >= 0) timers[idx] = { id, name, emoji, totalSeconds };
+      else timers.push({ id, name, emoji, totalSeconds });
+      all[key] = timers;
+      saveFile(SETTINGS_FILE, all);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.delete('/api/timers/:birthday/:id', async (req, res) => {
+  try {
+    const { birthday, id } = req.params;
+    if (pool) {
+      await pool.query('DELETE FROM saved_timers WHERE id=$1 AND birthday=$2', [id, birthday]);
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      const key = birthday + '_timers';
+      all[key] = (all[key] || []).filter((t: any) => t.id !== id);
+      saveFile(SETTINGS_FILE, all);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// ── App Settings ──────────────────────────────────────────────────────────────
+
+app.get('/api/app-settings/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    if (pool) {
+      const { rows } = await pool.query('SELECT lock_rotation, disable_easter_eggs FROM app_settings WHERE birthday=$1', [birthday]);
+      if (rows.length === 0) return res.json({ lockRotation: false, disableEasterEggs: false });
+      return res.json({ lockRotation: rows[0].lock_rotation, disableEasterEggs: rows[0].disable_easter_eggs });
+    }
+    const all = loadFile(SETTINGS_FILE) || {};
+    return res.json(all[birthday + '_appsettings'] || { lockRotation: false, disableEasterEggs: false });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/app-settings/:birthday', async (req, res) => {
+  try {
+    const { birthday } = req.params;
+    const { lockRotation, disableEasterEggs } = req.body;
+    if (pool) {
+      await pool.query(
+        `INSERT INTO app_settings (birthday, lock_rotation, disable_easter_eggs, updated_at) VALUES ($1,$2,$3,NOW())
+         ON CONFLICT (birthday) DO UPDATE SET lock_rotation=$2, disable_easter_eggs=$3, updated_at=NOW()`,
+        [birthday, lockRotation, disableEasterEggs]
+      );
+    } else {
+      const all = loadFile(SETTINGS_FILE) || {};
+      all[birthday + '_appsettings'] = { lockRotation, disableEasterEggs };
+      saveFile(SETTINGS_FILE, all);
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
 app.get('/api/weather', async (req: express.Request, res: express.Response) => {

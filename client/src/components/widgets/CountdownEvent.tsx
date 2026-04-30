@@ -90,7 +90,7 @@ function RingProgress({ percent, children }: { percent: number; children?: React
   );
 }
 
-export default function CountdownEvent() {
+export default function CountdownEvent({ birthday }: { birthday: string }) {
   const [tab, setTab] = useState<'timer' | 'events'>('timer');
 
   // Timer
@@ -105,20 +105,46 @@ export default function CountdownEvent() {
   const intervalRef = useRef<any>(null);
   const endRef = useRef<number>(0);
 
-  const [savedTimers, setSavedTimers] = useState<SavedTimer[]>(() => {
-    try { return JSON.parse(localStorage.getItem('savedTimers') || '[]'); } catch { return []; }
-  });
+  const [savedTimers, setSavedTimers] = useState<SavedTimer[]>([]);
   const [showSave, setShowSave] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saveEmoji, setSaveEmoji] = useState('⏱️');
 
   // Events
-  const [events, setEvents] = useState<any[]>(() => {
-    try { return JSON.parse(localStorage.getItem('countdownEvents') || '[]'); } catch { return []; }
-  });
+  const [events, setEvents] = useState<any[]>([]);
   const [showEventForm, setShowEventForm] = useState(false);
   const [newEvent, setNewEvent] = useState({ name: '', date: '', emoji: '🎯' });
   const [now, setNow] = useState(new Date());
+
+  // Betöltés DB-ből
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [evRes, tmRes] = await Promise.all([
+          fetch(`/api/events/${encodeURIComponent(birthday)}`),
+          fetch(`/api/timers/${encodeURIComponent(birthday)}`),
+        ]);
+        if (evRes.ok) {
+          const evData = await evRes.json();
+          setEvents(evData);
+          localStorage.setItem('countdownEvents', JSON.stringify(evData));
+        } else {
+          setEvents(JSON.parse(localStorage.getItem('countdownEvents') || '[]'));
+        }
+        if (tmRes.ok) {
+          const tmData = await tmRes.json();
+          setSavedTimers(tmData);
+          localStorage.setItem('savedTimers', JSON.stringify(tmData));
+        } else {
+          setSavedTimers(JSON.parse(localStorage.getItem('savedTimers') || '[]'));
+        }
+      } catch {
+        setEvents(JSON.parse(localStorage.getItem('countdownEvents') || '[]'));
+        setSavedTimers(JSON.parse(localStorage.getItem('savedTimers') || '[]'));
+      }
+    }
+    loadData();
+  }, [birthday]);
 
   useEffect(() => {
     const i = setInterval(() => setNow(new Date()), 1000);
@@ -258,13 +284,20 @@ export default function CountdownEvent() {
 
   const percent = remaining !== null && totalSet > 0 ? (remaining / totalSet) * 100 : 100;
 
-  const saveTimerFn = () => {
+  const saveTimerFn = async () => {
     if (!saveName.trim()) return;
     const t: SavedTimer = { id: Date.now().toString(), name: saveName, emoji: saveEmoji, totalSeconds: getTotalSecs() };
     const updated = [...savedTimers, t];
     setSavedTimers(updated);
     localStorage.setItem('savedTimers', JSON.stringify(updated));
     setShowSave(false); setSaveName('');
+    try {
+      await fetch(`/api/timers/${encodeURIComponent(birthday)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(t),
+      });
+    } catch {}
   };
 
   const getCountdown = (dateStr: string) => {
@@ -276,13 +309,21 @@ export default function CountdownEvent() {
     };
   };
 
-  const addEvent = () => {
+  const addEvent = async () => {
     if (!newEvent.name.trim() || !newEvent.date) return;
-    const updated = [...events, { id: Date.now().toString(), ...newEvent }];
+    const ev = { id: Date.now().toString(), ...newEvent };
+    const updated = [...events, ev];
     setEvents(updated);
     localStorage.setItem('countdownEvents', JSON.stringify(updated));
     setNewEvent({ name: '', date: '', emoji: '🎯' });
     setShowEventForm(false);
+    try {
+      await fetch(`/api/events/${encodeURIComponent(birthday)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ev),
+      });
+    } catch {}
   };
 
   return (
@@ -341,10 +382,11 @@ export default function CountdownEvent() {
                           <span className="text-sm text-gray-700 dark:text-gray-300">{t.name}</span>
                           <span className="text-xs text-gray-400 font-mono">{fmtSecs(t.totalSeconds)}</span>
                         </button>
-                        <button onClick={() => {
+                        <button onClick={async () => {
                           const u = savedTimers.filter(x => x.id !== t.id);
                           setSavedTimers(u);
                           localStorage.setItem('savedTimers', JSON.stringify(u));
+                          try { await fetch(`/api/timers/${encodeURIComponent(birthday)}/${t.id}`, { method: 'DELETE' }); } catch {}
                         }} className="text-red-400 ml-2">×</button>
                       </div>
                     ))}
@@ -412,10 +454,11 @@ export default function CountdownEvent() {
                     <div key={e.id} className="bg-blue-50 dark:bg-gray-700 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-medium text-sm text-gray-800 dark:text-gray-200">{e.emoji} {e.name}</span>
-                        <button onClick={() => {
+                        <button onClick={async () => {
                           const u = events.filter(x => x.id !== e.id);
                           setEvents(u);
                           localStorage.setItem('countdownEvents', JSON.stringify(u));
+                          try { await fetch(`/api/events/${encodeURIComponent(birthday)}/${e.id}`, { method: 'DELETE' }); } catch {}
                         }} className="text-red-400 text-lg">×</button>
                       </div>
                       {cd && (

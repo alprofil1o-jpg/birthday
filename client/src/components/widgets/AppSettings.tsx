@@ -7,36 +7,55 @@ interface AppSettingsProps {
 }
 
 export default function AppSettings({ birthday }: AppSettingsProps) {
-  const [lockRotation, setLockRotation] = useState(() => {
-    return localStorage.getItem('lockRotation') === 'true';
-  });
-  const [disableEasterEggs, setDisableEasterEggs] = useState(() => {
-    return localStorage.getItem('disableEasterEggs') === 'true';
-  });
+  const [lockRotation, setLockRotation] = useState(false);
+  const [disableEasterEggs, setDisableEasterEggs] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
 
+  // Betöltés DB-ből
   useEffect(() => {
-    localStorage.setItem('lockRotation', String(lockRotation));
-    // Apply screen orientation lock if supported
-    if (lockRotation) {
+    async function load() {
       try {
-        (screen.orientation as any)?.lock?.('portrait');
-      } catch {}
-    } else {
-      try {
-        (screen.orientation as any)?.unlock?.();
-      } catch {}
+        const res = await fetch(`/api/app-settings/${encodeURIComponent(birthday)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setLockRotation(data.lockRotation ?? false);
+          setDisableEasterEggs(data.disableEasterEggs ?? false);
+        }
+      } catch {
+        setLockRotation(localStorage.getItem('lockRotation') === 'true');
+        setDisableEasterEggs(localStorage.getItem('disableEasterEggs') === 'true');
+      }
     }
-  }, [lockRotation]);
+    load();
+  }, [birthday]);
 
-  useEffect(() => {
-    localStorage.setItem('disableEasterEggs', String(disableEasterEggs));
-    // If disabling, reset any current rotation
-    if (disableEasterEggs) {
+  async function saveToDb(lr: boolean, dee: boolean) {
+    localStorage.setItem('lockRotation', String(lr));
+    localStorage.setItem('disableEasterEggs', String(dee));
+    try {
+      await fetch(`/api/app-settings/${encodeURIComponent(birthday)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockRotation: lr, disableEasterEggs: dee }),
+      });
+    } catch {}
+  }
+
+  const handleLockRotation = (val: boolean) => {
+    setLockRotation(val);
+    saveToDb(val, disableEasterEggs);
+    if (val) { try { (screen.orientation as any)?.lock?.('portrait'); } catch {} }
+    else { try { (screen.orientation as any)?.unlock?.(); } catch {} }
+  };
+
+  const handleDisableEasterEggs = (val: boolean) => {
+    setDisableEasterEggs(val);
+    saveToDb(lockRotation, val);
+    if (val) {
       document.body.style.transition = 'transform 0.5s ease';
       document.body.style.transform = 'rotate(0deg)';
     }
-  }, [disableEasterEggs]);
+  };
 
   const settings = [
     {
@@ -45,7 +64,7 @@ export default function AppSettings({ birthday }: AppSettingsProps) {
       desc: 'Portré módban tartja az appot',
       emoji: '🔒',
       value: lockRotation,
-      onChange: setLockRotation,
+      onChange: handleLockRotation,
     },
     {
       key: 'disableEasterEggs',
@@ -53,7 +72,7 @@ export default function AppSettings({ birthday }: AppSettingsProps) {
       desc: 'Bálint/derék nem forgatja az oldalt',
       emoji: '🥚',
       value: disableEasterEggs,
-      onChange: setDisableEasterEggs,
+      onChange: handleDisableEasterEggs,
     },
   ];
 
