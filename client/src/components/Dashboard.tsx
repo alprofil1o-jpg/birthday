@@ -13,8 +13,8 @@ import OnThisDay from '../components/widgets/OnThisDay';
 import DailyQuiz from '../components/widgets/DailyQuiz';
 import Stopwatch from '../components/widgets/Stopwatch';
 import NotificationsWidget from '../components/widgets/NotificationsWidget';
+import RemindersWidget from '../components/widgets/RemindersWidget';
 import AppSettings from '../components/widgets/AppSettings';
-import NotificationSettings from './NotificationSettings';
 import { Button } from '../components/ui/button';
 
 interface DashboardProps {
@@ -24,15 +24,16 @@ interface DashboardProps {
 
 const DEFAULT_ORDER = [
   'clock', 'birthday', 'weather', 'nameday', 'age',
-  'notifications', 'holidays', 'onthisday', 'quiz',
+  'notifications', 'reminders', 'holidays', 'onthisday', 'quiz',
   'countdown', 'stopwatch', 'notes', 'settings', 'joke',
 ];
 
 const WIDGET_LABELS: Record<string, string> = {
   clock: '🕐 Óra', birthday: '🎂 Születésnap számláló', weather: '🌤 Időjárás',
-  nameday: '👤 Névnap', age: '🎂 Életkor', notifications: '⚙️ Beállítások',
+  nameday: '👤 Névnap', age: '🎂 Életkor', notifications: '🔔 Értesítések',
+  reminders: '⏰ Emlékeztetők',
   holidays: '🎉 Ünnepek', onthisday: '📰 Ezen a napon', quiz: '🎯 Napi kvíz',
-  countdown: '⏰ Időzítő', stopwatch: '⏱️ Stopper', notes: '📝 Jegyzetek',
+  countdown: '⏰ Időzítő', stopwatch: '⏱️ Stopper', notes: '📝 jegyzetek',
   settings: 'ℹ️ Információk', joke: '😄 Napi vicc',
 };
 
@@ -132,6 +133,7 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
       case 'nameday': return <NameDay birthday={birthday} />;
       case 'age': return <AgeCounter birthday={birthday} />;
       case 'notifications': return <NotificationsWidget birthday={birthday} />;
+      case 'reminders': return <RemindersWidget birthday={birthday} />;
       case 'holidays': return <Holidays />;
       case 'onthisday': return <OnThisDay />;
       case 'quiz': return <DailyQuiz />;
@@ -194,7 +196,6 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <NotificationSettings birthday={birthday} />
               <Button onClick={handleChangeBirthday} variant="outline" className="text-sm">
                 Születésnap Módosítása
               </Button>

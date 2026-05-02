@@ -22,6 +22,15 @@ darkQuery.addEventListener('change', (e) => {
   }
 });
 
+// Értesítés engedély kérés — csak egyszer, első indításkor (3mp késleltetéssel)
+if ('Notification' in window && Notification.permission === 'default' && !localStorage.getItem('notifPermAsked')) {
+  setTimeout(() => {
+    Notification.requestPermission().then(() => {
+      localStorage.setItem('notifPermAsked', '1');
+    });
+  }, 3000);
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
