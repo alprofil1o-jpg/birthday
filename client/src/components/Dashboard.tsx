@@ -243,19 +243,20 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
   ];
 
   const renderWidget = (id: string) => {
+    const wrap = (el: React.ReactNode) => <div className="flex flex-col h-full">{el}</div>;
     switch (id) {
-      case 'clock': return <Clock />;
-      case 'birthday': return <BirthdayCountdown birthday={birthday} />;
-      case 'weather': return <Weather />;
-      case 'nameday': return <NameDay birthday={birthday} />;
-      case 'age': return <AgeCounter birthday={birthday} />;
-      case 'reminders': return <RemindersWidget birthday={birthday} />;
-      case 'holidays': return <Holidays />;
-      case 'onthisday': return <OnThisDay />;
-      case 'quiz': return <DailyQuiz />;
-      case 'countdown': return <CountdownEvent birthday={birthday} />;
-      case 'stopwatch': return <Stopwatch />;
-      case 'notes': return <div className="md:col-span-2"><Notes birthday={birthday} /></div>;
+      case 'clock': return wrap(<Clock />);
+      case 'birthday': return wrap(<BirthdayCountdown birthday={birthday} />);
+      case 'weather': return wrap(<Weather />);
+      case 'nameday': return wrap(<NameDay birthday={birthday} />);
+      case 'age': return wrap(<AgeCounter birthday={birthday} />);
+      case 'reminders': return wrap(<RemindersWidget birthday={birthday} />);
+      case 'holidays': return wrap(<Holidays />);
+      case 'onthisday': return wrap(<OnThisDay />);
+      case 'quiz': return wrap(<DailyQuiz />);
+      case 'countdown': return wrap(<CountdownEvent birthday={birthday} />);
+      case 'stopwatch': return wrap(<Stopwatch />);
+      case 'notes': return <div className="md:col-span-2 flex flex-col h-full"><Notes birthday={birthday} /></div>;
       case 'joke': return <div className="col-span-1 md:col-span-2 lg:col-span-3"><DailyJoke /></div>;
       default: return null;
     }
@@ -284,7 +285,11 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
         </div>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .widget-stretch > * { height: 100%; }
+        .widget-stretch .flex.flex-col.h-full > * { height: 100%; }
+      `}</style>
 
       <div
         className="min-h-screen p-4 pt-safe transition-colors duration-300"
@@ -367,7 +372,7 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
           )}
 
           {/* Widgets — joke mindig legalul */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="widget-stretch grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch auto-rows-fr">
             {orderedWidgets.filter(id => !hidden.includes(id)).map(id => (
               <React.Fragment key={id}>{renderWidget(id)}</React.Fragment>
             ))}
