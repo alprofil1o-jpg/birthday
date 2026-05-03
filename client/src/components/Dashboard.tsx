@@ -256,7 +256,7 @@ export default function Dashboard({ birthday, onChangeBirthday }: DashboardProps
       case 'quiz': return wrap(<DailyQuiz />);
       case 'countdown': return wrap(<CountdownEvent birthday={birthday} />);
       case 'stopwatch': return wrap(<Stopwatch />);
-      case 'notes': return <div className="md:col-span-2 flex flex-col h-full"><Notes birthday={birthday} /></div>;
+      case 'notes': return wrap(<Notes birthday={birthday} />);
       case 'joke': return <div className="col-span-1 md:col-span-2 lg:col-span-3"><DailyJoke /></div>;
       default: return null;
     }
